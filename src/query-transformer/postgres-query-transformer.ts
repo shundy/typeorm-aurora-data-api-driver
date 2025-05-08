@@ -102,6 +102,22 @@ export class PostgresQueryTransformer extends QueryTransformer {
     if (metadata.isArray && typeof value === 'string') {
       return postgresArrayToArray(value);
     }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const arrayValueKey = Object.keys(value).find(key =>
+        key.endsWith('Values') && Array.isArray(value[key]));
+
+      if (arrayValueKey) {
+        // 配列値を取得
+        const arrayValue = value[arrayValueKey];
+
+        // メタデータに基づいて適切な型に変換
+        if (metadata.type === 'simple-array') {
+          return arrayValue;
+        } else if (metadata.isArray) {
+          return arrayValue;
+        }
+      }
+    }
 
     switch (metadata.type) {
       case Boolean:

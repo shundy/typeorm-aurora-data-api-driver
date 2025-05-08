@@ -304,48 +304,72 @@ const formatRecords = (recs, columns, hydrate, formatOptions) => {
     )
     : {}
 
-  // Map over all the records (rows)
-  return recs
-    ? recs.map((rec) =>
-      // Reduce each field in the record (row)
-      rec.reduce(
-        (acc, field, i) => {
-          // If the field is null, always return null
-          if (field.isNull === true) {
-            return hydrate // object if hydrate, else array
-              ? Object.assign(acc, { [fmap[i].label]: null })
-              : acc.concat(null)
+    // Map over all the records (rows)
+    return recs
+      ? recs.map((rec) =>
+        // Reduce each field in the record (row)
+        rec.reduce(
+          (acc, field, i) => {
+            // If the field is null, always return null
+            if (field.isNull === true) {
+              return hydrate // object if hydrate, else array
+                ? Object.assign(acc, { [fmap[i].label]: null })
+                : acc.concat(null)
+            }
+
+            // 配列値の検出を追加
+            const arrayValueKey = Object.keys(field).find(key =>
+              key.endsWith('Values') && Array.isArray(field[key]));
+
+            if (arrayValueKey) {
+              const value = field[arrayValueKey];
+              return hydrate
+                ? Object.assign(acc, { [fmap[i].label]: value })
+                : acc.concat(value);
+            }
 
             // If the field is mapped, return the mapped field
-          } if (fmap[i] && fmap[i].field) {
+            if (fmap[i] && fmap[i].field) {
+              const value = formatRecordValue(field[fmap[i].field], fmap[i].typeName, formatOptions)
+              return hydrate // object if hydrate, else array
+                ? Object.assign(acc, { [fmap[i].label]: value })
+                : acc.concat(value)
+
+            // Else discover the field type
+            }
+          // Look for non-null fields
+            Object.keys(field).map((type) => {
+              if (type !== 'isNull' && field[type] !== null) {
+                fmap[i].field = type
+              }
+            })
+
+            // Return the mapped field (this should NEVER be null)
             const value = formatRecordValue(field[fmap[i].field], fmap[i].typeName, formatOptions)
             return hydrate // object if hydrate, else array
               ? Object.assign(acc, { [fmap[i].label]: value })
               : acc.concat(value)
-
-            // Else discover the field type
-          }
-          // Look for non-null fields
-          Object.keys(field).map((type) => {
-            if (type !== 'isNull' && field[type] !== null) {
-              fmap[i].field = type
-            }
-          })
-
-          // Return the mapped field (this should NEVER be null)
-          const value = formatRecordValue(field[fmap[i].field], fmap[i].typeName, formatOptions)
-          return hydrate // object if hydrate, else array
-            ? Object.assign(acc, { [fmap[i].label]: value })
-            : acc.concat(value)
-        },
-        hydrate ? {} : [],
-      ), // init object if hydrate, else init array
-    )
-    : [] // empty record set returns an array
+          },
+          hydrate ? {} : [],
+        ), // init object if hydrate, else init array
+      )
+      : [] // empty record set returns an array
 } // end formatRecords
 
 // Format record value based on its value, the database column's typeName and the formatting options
 const formatRecordValue = (value, typeName, formatOptions) => {
+  // 配列値の処理を追加
+  if (value && typeof value === 'object') {
+    // stringValues, longValues などの配列値を検出
+    const arrayValueKey = Object.keys(value).find(key =>
+      key.endsWith('Values') && Array.isArray(value[key]));
+
+    if (arrayValueKey) {
+      return value[arrayValueKey]; // 直接配列を返す
+    }
+  }
+
+  // 既存の処理を維持
   if (
     formatOptions
     && formatOptions.deserializeDate
