@@ -1,5 +1,5 @@
 import { ColumnMetadata } from 'typeorm/metadata/ColumnMetadata'
-import { dateToDateString, dateToTimeString, dateToDateTimeString, simpleArrayToString, stringToSimpleArray, getDecimalCast } from '../utils/transform.utils'
+import { dateToDateString, dateToTimeString, dateToDateTimeString, simpleArrayToString, stringToSimpleArray, getDecimalCast, arrayToPostgresArray, postgresArrayToArray } from '../utils/transform.utils'
 import { QueryTransformer } from './query-transformer'
 
 export class PostgresQueryTransformer extends QueryTransformer {
@@ -70,6 +70,24 @@ export class PostgresQueryTransformer extends QueryTransformer {
           value: '' + value,
           cast: metadata.enumName || `${metadata.entityMetadata.schema ? `${metadata.entityMetadata.schema}.` : ''}${metadata.entityMetadata.tableName}_${metadata.databaseName.toLowerCase()}_enum`,
         }
+        // PostgreSQLのネイティブ配列型を処理する
+      case 'int':
+      case 'integer':
+      case 'decimal':
+      case 'numeric':
+      case 'text':
+      case 'varchar':
+      case 'character varying':
+        if (metadata.isArray) {
+          return {
+            value: arrayToPostgresArray(value),
+            cast: `${metadata.type}[]`,
+          }
+        }
+        return {
+          value: '' + value,
+          cast: metadata.type,
+        }
       default:
         return {
           value,
@@ -80,6 +98,9 @@ export class PostgresQueryTransformer extends QueryTransformer {
   prepareHydratedValue(value: any, metadata: ColumnMetadata): any {
     if (value === null || value === undefined) {
       return value
+    }
+    if (metadata.isArray && typeof value === 'string') {
+      return postgresArrayToArray(value);
     }
 
     switch (metadata.type) {

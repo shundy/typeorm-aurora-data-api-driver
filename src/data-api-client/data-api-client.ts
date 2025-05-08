@@ -216,11 +216,11 @@ const getType = (val) => (typeof val === 'string'
             ? 'stringValue'
             : Buffer.isBuffer(val)
               ? 'blobValue'
-              : // : Array.isArray(val) ? 'arrayValue' This doesn't work yet
-            // TODO: there is a 'structValue' now for postgres
-              typeof val === 'object' && Object.keys(val).length === 1 && supportedTypes.includes(Object.keys(val)[0])
-                ? null
-                : undefined)
+              : Array.isArray(val)
+                ? 'stringValue'
+                : typeof val === 'object' && Object.keys(val).length === 1 && supportedTypes.includes(Object.keys(val)[0])
+                  ? null
+                  : undefined)
 
 // Hint to specify the underlying object type for data type mapping
 const getTypeHint = (val) => (isDate(val) ? 'TIMESTAMP' : undefined)
