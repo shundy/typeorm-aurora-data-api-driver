@@ -16,6 +16,7 @@ import {
 } from './entity/SimpleEnumEntity'
 import User from './entity/User'
 import { UuidPost } from './entity/UuidPost'
+import { ArrayEntity } from './entity/Array'
 
 describe('aurora data api pg > simple queries', () => {
   jest.setTimeout(240000)
@@ -506,6 +507,34 @@ describe('aurora data api pg > simple queries', () => {
       expect(loadedJsonEntity).toBeTruthy()
       expect(loadedJsonEntity.json).toEqual(null)
       expect(loadedJsonEntity.jsonb).toEqual(jsonEntity.jsonb)
+    })
+  })
+
+  it('should handle advanced PostgreSQL array types', async () => {
+    await useCleanDatabase('postgres', { entities: [ArrayEntity] }, async (connection) => {
+      const arrayEntityRepository = connection.getRepository(ArrayEntity)
+
+      const arrayEntity = new ArrayEntity()
+      arrayEntity.array = ['one', 'two', 'three']
+      arrayEntity.numberArray = [1, 2, 3, 4, 5]
+      // arrayEntity.textArray = ['test1', 'test2', 'test3']
+      // arrayEntity.varcharArray = ['short1', 'short2', 'short3']
+      // arrayEntity.floatArray = [1.1, 2.2, 3.3, 4.4]
+      // arrayEntity.booleanArray = [true, false, true]
+      // arrayEntity.jsonArray = [{ id: 1, name: 'Test1' }, { id: 2, name: 'Test2' }]
+
+      await arrayEntityRepository.save(arrayEntity)
+
+      const loadedArrayEntity = await arrayEntityRepository.findOneBy({ id: arrayEntity.id })
+
+      expect(loadedArrayEntity).toBeTruthy()
+      expect(loadedArrayEntity!.array).toEqual(['one', 'two', 'three'])
+      expect(loadedArrayEntity!.numberArray).toEqual([1, 2, 3, 4, 5])
+      expect(loadedArrayEntity!.textArray).toEqual(['長いテキスト1', '長いテキスト2', '長いテキスト3'])
+      expect(loadedArrayEntity!.varcharArray).toEqual(['short1', 'short2', 'short3'])
+      expect(loadedArrayEntity!.floatArray).toEqual([1.1, 2.2, 3.3, 4.4])
+      expect(loadedArrayEntity!.booleanArray).toEqual([true, false, true])
+      expect(loadedArrayEntity!.jsonArray).toEqual([{ id: 1, name: 'Test1' }, { id: 2, name: 'Test2' }])
     })
   })
 })
