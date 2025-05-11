@@ -202,7 +202,25 @@ const getSqlParams = (sql) =>
 
 // Gets the value type and returns the correct value field name
 // TODO: Support more types as the are released
-const getType = (val) => (typeof val === 'string'
+const getType = (val) => {
+
+  if (Array.isArray(val)) {
+    // 配列の要素の型に基づいて適切な型を決定
+    if (val.length === 0) return 'stringValues'; // 空配列はデフォルトで文字列配列として扱う
+
+    const firstNonNull = val.find(item => item !== null);
+    if (firstNonNull === undefined) return 'stringValues'; // すべてnullの場合
+
+    if (typeof firstNonNull === 'string') return 'stringValues';
+    if (typeof firstNonNull === 'boolean') return 'booleanValues';
+    if (typeof firstNonNull === 'number' && parseInt(firstNonNull) === firstNonNull) return 'longValues';
+    if (typeof firstNonNull === 'number') return 'doubleValues';
+    if (Array.isArray(firstNonNull)) return 'arrayValues';
+
+    return 'stringValues'; // デフォルト
+  }
+
+  return typeof val === 'string'
   ? 'stringValue'
   : typeof val === 'boolean'
     ? 'booleanValue'
@@ -220,7 +238,8 @@ const getType = (val) => (typeof val === 'string'
             // TODO: there is a 'structValue' now for postgres
               typeof val === 'object' && Object.keys(val).length === 1 && supportedTypes.includes(Object.keys(val)[0])
                 ? null
-                : undefined)
+                : undefined
+}
 
 // Hint to specify the underlying object type for data type mapping
 const getTypeHint = (val) => (isDate(val) ? 'TIMESTAMP' : undefined)
@@ -315,9 +334,24 @@ const formatRecords = (recs, columns, hydrate, formatOptions) => {
             return hydrate // object if hydrate, else array
               ? Object.assign(acc, { [fmap[i].label]: null })
               : acc.concat(null)
+          }
 
-            // If the field is mapped, return the mapped field
-          } if (fmap[i] && fmap[i].field) {
+          // 配列型の値を処理
+          if (field.stringValues || field.booleanValues || field.longValues || field.doubleValues || field.arrayValues) {
+            let value;
+            if (field.stringValues) value = field.stringValues;
+            else if (field.booleanValues) value = field.booleanValues;
+            else if (field.longValues) value = field.longValues;
+            else if (field.doubleValues) value = field.doubleValues;
+            else if (field.arrayValues) value = field.arrayValues;
+
+            return hydrate // object if hydrate, else array
+              ? Object.assign(acc, { [fmap[i].label]: value })
+              : acc.concat(value);
+          }
+
+          // If the field is mapped, return the mapped field
+          if (fmap[i] && fmap[i].field) {
             const value = formatRecordValue(field[fmap[i].field], fmap[i].typeName, formatOptions)
             return hydrate // object if hydrate, else array
               ? Object.assign(acc, { [fmap[i].label]: value })
@@ -346,6 +380,16 @@ const formatRecords = (recs, columns, hydrate, formatOptions) => {
 
 // Format record value based on its value, the database column's typeName and the formatting options
 const formatRecordValue = (value, typeName, formatOptions) => {
+  if (value && typeof value === 'object') {
+    if (value.stringValues) return value.stringValues;
+    if (value.booleanValues) return value.booleanValues;
+    if (value.longValues) return value.longValues;
+    if (value.doubleValues) return value.doubleValues;
+    if (value.arrayValues) {
+      return value.arrayValues.map(item => formatRecordValue(item, typeName, formatOptions));
+    }
+  }
+
   if (
     formatOptions
     && formatOptions.deserializeDate

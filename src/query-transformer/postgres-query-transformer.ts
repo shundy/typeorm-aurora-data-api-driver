@@ -8,6 +8,12 @@ export class PostgresQueryTransformer extends QueryTransformer {
       return value
     }
 
+    // 配列型の処理
+    if (metadata.isArray && Array.isArray(value)) {
+      // PostgreSQL配列形式に変換
+      return this.stringifyArrayForPostgres(value, metadata.type)
+    }
+
     switch (metadata.type) {
       case 'date':
         return {
@@ -77,6 +83,27 @@ export class PostgresQueryTransformer extends QueryTransformer {
     }
   }
 
+  // JavaScript配列をPostgreSQL配列文字列に変換するヘルパーメソッド
+  private stringifyArrayForPostgres(value: any[], type: string): string {
+    if (value.length === 0) return '{}'
+
+    const items = value.map(item => {
+      if (item === null) return 'NULL'
+
+      switch (type) {
+        case 'varchar':
+        case 'character varying':
+        case 'text':
+          // 文字列は引用符でエスケープ
+          return `"${String(item).replace(/"/g, '\\"')}"`
+        default:
+          return String(item)
+      }
+    })
+
+    return `{${items.join(',')}}`
+  }
+
   prepareHydratedValue(value: any, metadata: ColumnMetadata): any {
     if (value === null || value === undefined) {
       return value
@@ -125,8 +152,50 @@ export class PostgresQueryTransformer extends QueryTransformer {
         }
         // convert to number if that exists in poosible enum options
         return !Number.isNaN(+value) && metadata.enum!.indexOf(parseInt(value, 10)) >= 0 ? parseInt(value, 10) : value
+      // PostgreSQL配列型の処理を追加
+      case 'int':
+      case 'int2':
+      case 'int4':
+      case 'int8':
+      case 'integer':
+      case 'smallint':
+      case 'bigint':
+        if (metadata.isArray && typeof value === 'string') {
+          // '{1,2,3}' 形式の文字列を配列に変換
+          return this.parsePostgresArray(value, (val) => parseInt(val, 10))
+        }
+        return value
+
+      case 'decimal':
+      case 'numeric':
+      case 'real':
+      case 'float':
+      case 'float4':
+      case 'float8':
+      case 'double precision':
+        if (metadata.isArray && typeof value === 'string') {
+          return this.parsePostgresArray(value, (val) => parseFloat(val))
+        }
+        return value
+
+      case 'varchar':
+      case 'character varying':
+      case 'text':
+        if (metadata.isArray && typeof value === 'string') {
+          return this.parsePostgresArray(value, (val) => val)
+        }
+        return value
+
+      case 'boolean':
+        if (metadata.isArray && typeof value === 'string') {
+          return this.parsePostgresArray(value, (val) => val === 'true' || val === 't')
+        }
+        return value
 
       default:
+        if (metadata.isArray && typeof value === 'string') {
+          return this.parsePostgresArray(value)
+        }
         return value
     }
   }
@@ -189,5 +258,29 @@ export class PostgresQueryTransformer extends QueryTransformer {
         value: parameter,
       }
     })
+  }
+
+  // PostgreSQL配列文字列をJavaScript配列に変換するヘルパーメソッド
+  private parsePostgresArray(value: string, itemConverter: (item: string) => any = (item) => item): any[] {
+    if (value === '{}') return []
+
+    // '{item1,item2,...}' 形式の文字列から中身を取り出す
+    const content = value.substring(1, value.length - 1)
+
+    // カンマで分割して配列に変換
+    if (content.length === 0) return []
+
+    return content.split(',')
+      .map((item) => {
+        // NULL値の処理
+        if (item === 'NULL') return null
+
+        // 引用符で囲まれた文字列の処理
+        if (item.startsWith('"') && item.endsWith('"')) {
+          return itemConverter(item.substring(1, item.length - 1).replace(/\\"/g, '"'))
+        }
+
+        return itemConverter(item)
+      })
   }
 }

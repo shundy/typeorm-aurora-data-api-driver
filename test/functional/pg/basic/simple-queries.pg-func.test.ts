@@ -16,6 +16,7 @@ import {
 } from './entity/SimpleEnumEntity'
 import User from './entity/User'
 import { UuidPost } from './entity/UuidPost'
+import { ArrayEntity } from './entity/ArrayEntity'
 
 describe('aurora data api pg > simple queries', () => {
   jest.setTimeout(240000)
@@ -484,6 +485,27 @@ describe('aurora data api pg > simple queries', () => {
 
       expect(loadedSimpleArrayEntity).toBeTruthy()
       expect(loadedSimpleArrayEntity.array).toEqual([])
+    })
+  })
+
+  // テストケース
+  it('should handle array types', async () => {
+    await useCleanDatabase('postgres', { entities: [ArrayEntity] }, async (connection) => {
+      const arrayEntity = new ArrayEntity()
+
+      arrayEntity.intArray = [1, 2, 3]
+      arrayEntity.textArray = ['foo', 'bar', 'baz']
+      arrayEntity.booleanArray = [true, false, true]
+
+      const newArrayEntity = await connection.getRepository(ArrayEntity).save(arrayEntity)
+
+      const loadedArrayEntity = (await connection.getRepository(ArrayEntity).findOneBy({ id: newArrayEntity.id }))!
+
+      // Assert
+      expect(loadedArrayEntity).toBeTruthy()
+      expect(loadedArrayEntity.intArray).toEqual(arrayEntity.intArray)
+      expect(loadedArrayEntity.textArray).toEqual(arrayEntity.textArray)
+      expect(loadedArrayEntity.booleanArray).toEqual(arrayEntity.booleanArray)
     })
   })
 
